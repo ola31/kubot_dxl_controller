@@ -10,6 +10,7 @@ project(kubot_dxl_controller)
 find_package(catkin REQUIRED COMPONENTS
   dynamixel_sdk
   roscpp
+  roslib
   std_msgs
 )
 
@@ -105,7 +106,7 @@ find_package(catkin REQUIRED COMPONENTS
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES kubot_dxl_controller
-  CATKIN_DEPENDS dynamixel_sdk roscpp std_msgs
+  CATKIN_DEPENDS dynamixel_sdk roscpp std_msgs roslib
 #  DEPENDS system_lib
 )
 

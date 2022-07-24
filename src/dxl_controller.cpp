@@ -7,16 +7,43 @@ dynamixel::GroupSyncWrite groupSyncWrite(portHandler, packetHandler, ADDR_GOAL_P
 dynamixel::GroupSyncRead groupSyncRead(portHandler, packetHandler, ADDR_PRESENT_POSITION, LEN_PRESENT_POSITION);
 
 
+bool dxl_controller::Initialize(void){
+  // Open port
+  if (!OpenPort()) return false;
+  // Set port baudrate
+  if (!SetBaudRate()) return false;
 
-void dxl_controller::Initialize(void){
+  return true;
+}
 
-
-
+bool dxl_controller::OpenPort(void){
+  // Open port
+  if (portHandler->openPort()){
+    printf("Succeeded to open the port!\n");
+    return true;
+  }
+  else{
+    printf("Failed to open the port!\n");
+    return false;
+  }
+}
+bool dxl_controller::SetBaudRate(void){
+  // Set port baudrate
+  if (portHandler->setBaudRate(BAUDRATE)){
+    printf("Succeeded to change the baudrate!\n");
+    return true;
+  }
+  else{
+    printf("Failed to change the baudrate!\n");
+    return false;
+  }
 }
 
 void dxl_controller::ping_dxls(void){
 
   uint8_t error = 0;
+  uint16_t model_num;
+  int dxl_comm_result = COMM_TX_FAIL;
   std::string joint_name;
   int joint_id;
 
@@ -24,26 +51,36 @@ void dxl_controller::ping_dxls(void){
     joint_name = left_joint_name[i];
     joint_id = joints[joint_name];
 
-    packetHandler->ping(portHandler,joint_id, &error);
-    if(error==0)
-      ROS_INFO("joint[ %17s ] : id(%2d) found",joint_name.c_str(),joint_id);
+    dxl_comm_result = packetHandler->ping(portHandler,joint_id, &model_num, &error);
+    if(dxl_comm_result == COMM_SUCCESS)
+      ROS_INFO("JOINT[ %17s ] : ID[%2d] : MODEL[%d] Found",joint_name.c_str(), joint_id, model_num);
     else
-      ROS_ERROR("joint[ %17s ] : id(%2d) not found",joint_name.c_str(),joint_id);
+      ROS_ERROR("JOINT[ %17s ] : ID(%2d) Not Found",joint_name.c_str(),joint_id);
   }
+  std::cout<<std::endl;
   for(int i=0;i<LEG_DOF;i++){  //Right leg ping
     joint_name = right_joint_name[i];
     joint_id = joints[joint_name];
-    packetHandler->ping(portHandler,joint_id, &error);
-    if(error==0)
-      ROS_INFO("joint[ %17s ] : id(%2d) found",joint_name.c_str(),joint_id);
+
+    dxl_comm_result = packetHandler->ping(portHandler,joint_id, &error);
+    if(dxl_comm_result == COMM_SUCCESS)
+      ROS_INFO("JOINT[ %17s ] : ID[%2d] : MODEL[%d] Found",joint_name.c_str(), joint_id, model_num);
     else
-      ROS_ERROR("joint[ %17s ] : id(%2d) not found",joint_name.c_str(),joint_id);
+      ROS_ERROR("JOINT[ %17s ] : ID(%2d) Not Found",joint_name.c_str(),joint_id);
   }
+  /*
+  for(auto iter = joints.begin() ; iter !=  joints.end(); iter++){
+    std::cout<<iter->first<<" "<<iter->second<<std::endl;
+  }
+  */
 }
 
-void dxl_controller::setJointIdFrom_yaml(char file_path[]){  //JOINT_ID_FILEPATH
-  YAML::Node doc = YAML::LoadFile("/home/ola/catkin_ws/src/kubot_dxl_controller/config/joint_id.yaml");
-  std::cout<<"Read joint_id from yaml Start.. : "<<file_path<<std::endl;
+void dxl_controller::setJointIdFrom_yaml(const char file_path[]){  //JOINT_ID_FILEPATH
+  std::string local_path(file_path);
+  std::string path = this->pkg_path+local_path;
+
+  YAML::Node doc = YAML::LoadFile(path);
+  std::cout<<"Read joint_id from yaml Start.. : "<<path<<std::endl;
   try {
         unsigned int id_value;
         for(unsigned i=0;i<LEG_DOF;i++){
