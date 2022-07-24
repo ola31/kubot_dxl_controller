@@ -14,7 +14,7 @@ int main(int argc, char **argv)
 
   x.Initialize();
   //x.setJointIdFrom_yaml("/home/ola/catkin_ws/src/kubot_dxl_controller/config/joint_id.yaml");
-  x.setJointIdFrom_yaml(JOINT_ID_FILEPATH);
+  x.getJointIdFrom_yaml(JOINT_ID_FILEPATH);
   x.ping_dxls();
 
 

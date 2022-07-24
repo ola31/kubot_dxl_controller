@@ -1,6 +1,6 @@
 #include "kubot_dxl_controller/dxl_controller.h"
 
-
+//DXL SDK
 dynamixel::PortHandler *portHandler = dynamixel::PortHandler::getPortHandler(DEVICENAME);
 dynamixel::PacketHandler *packetHandler = dynamixel::PacketHandler::getPacketHandler(PROTOCOL_VERSION);
 dynamixel::GroupSyncWrite groupSyncWrite(portHandler, packetHandler, ADDR_GOAL_POSITION, LEN_GOAL_POSITION);
@@ -12,10 +12,11 @@ bool dxl_controller::Initialize(void){
   if (!OpenPort()) return false;
   // Set port baudrate
   if (!SetBaudRate()) return false;
+  this->getJointIdFrom_yaml(JOINT_ID_FILEPATH);
+  this->getJoint_PD_gainFrom_yaml(JOINT_PD_GAIN_FILEPATH);
 
   return true;
 }
-
 bool dxl_controller::OpenPort(void){
   // Open port
   if (portHandler->openPort()){
@@ -26,6 +27,10 @@ bool dxl_controller::OpenPort(void){
     printf("Failed to open the port!\n");
     return false;
   }
+}
+void dxl_controller::Close_port(void){
+  // Close port
+  portHandler->closePort();
 }
 bool dxl_controller::SetBaudRate(void){
   // Set port baudrate
@@ -38,7 +43,6 @@ bool dxl_controller::SetBaudRate(void){
     return false;
   }
 }
-
 void dxl_controller::ping_dxls(void){
 
   uint8_t error = 0;
@@ -74,8 +78,7 @@ void dxl_controller::ping_dxls(void){
   }
   */
 }
-
-void dxl_controller::setJointIdFrom_yaml(const char file_path[]){  //JOINT_ID_FILEPATH
+void dxl_controller::getJointIdFrom_yaml(const char file_path[]){  //JOINT_ID_FILEPATH
   std::string local_path(file_path);
   std::string path = this->pkg_path+local_path;
 
@@ -99,4 +102,29 @@ void dxl_controller::setJointIdFrom_yaml(const char file_path[]){  //JOINT_ID_FI
 
 
 }
-
+void dxl_controller::getJoint_PD_gainFrom_yaml(const char file_path[]){
+  std::string local_path(file_path);
+  std::string path = this->pkg_path+local_path;
+  YAML::Node doc = YAML::LoadFile(path);
+  int Pgain = 850; //default
+  int Dgain = 0;
+  try {
+        //auto str2 = doc["end"].as<std::map<std::string, YAML::Node>>();
+        for(unsigned i=0;i<LEG_DOF;i++){
+          YAML::Node str2 = doc[left_joint_name[i].c_str()];
+          Pgain=str2["P_gain"].as<int>();
+          Dgain=str2["D_gain"].as<int>();
+          jointP_gain.insert({left_joint_name[i], Pgain});
+          jointD_gain.insert({left_joint_name[i], Dgain});
+        }
+        for(unsigned i=0;i<LEG_DOF;i++){
+          auto str2 = doc[right_joint_name[i].c_str()];
+          Pgain=str2["P_gain"].as<int>();
+          Dgain=str2["D_gain"].as<int>();
+          jointP_gain.insert({right_joint_name[i], Pgain});
+          jointD_gain.insert({right_joint_name[i], Dgain});
+        }
+  } catch (YAML::Exception &e) {
+        std::cerr << "joint_PDgain YAML Exception: " << e.what() << std::endl;
+  }
+}
