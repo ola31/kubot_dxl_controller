@@ -1,4 +1,4 @@
-left_hip_yaw : 1
+left_hip_yaw : 
 
   P_gain: 850
   D_gain: 0

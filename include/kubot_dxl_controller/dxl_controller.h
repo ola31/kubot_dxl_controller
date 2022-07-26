@@ -4,6 +4,7 @@
 #include <ros/ros.h>
 
 #include "dynamixel_sdk/dynamixel_sdk.h"
+#include "dynamixel_sdk/protocol2_packet_handler.h"
 #include <map>
 #include <fstream>
 #include <iostream>
@@ -20,14 +21,20 @@
 
 #define BAUDRATE                        2000000
 #define ADDR_TORQUE_ENABLE              64
+#define TORQUE_ENABLE                   1
+#define TORQUE_DISABLE                  0
 
 #define ADDR_GOAL_POSITION              116
-#define ADDR_PRESENT_POSITION           13
+#define ADDR_PRESENT_POSITION           132
+
+#define ADDR_POSITION_P_GAIN             84
+#define ADDR_POSITION_D_GAIN             80
 // Data Byte Length
 #define LEN_GOAL_POSITION            4
 #define LEN_PRESENT_POSITION         4
 
 #define LEG_DOF                      6  //leg demension of freedom
+#define TOTAL_DXL_NUM               12  //this must be modified if robot has more than 12 dxls
 
 #define JOINT_ID_FILEPATH         "/config/joint_id.yaml"
 #define JOINT_PD_GAIN_FILEPATH    "/config/joint_PD_gain.yaml"
@@ -53,10 +60,14 @@ public:
   bool OpenPort(void);
   void Close_port(void);
   bool SetBaudRate(void);
-  void ping_dxls(void);
-  void getJointIdFrom_yaml(const char file_path[]);
-  void getJoint_PD_gainFrom_yaml(std::string path);
-  void getJoint_PD_gainFrom_yaml(const char file_path[]);
+  bool Torque_ON_dxls();
+  bool Torque_OFF_dxls();
+  bool ping_dxls(void);
+  bool getJointIdFrom_yaml(const char file_path[]);
+  bool getJoint_PD_gainFrom_yaml(const char file_path[]);
+  bool setDXL_PD_gain(void);
+  void set_Dxl_Encoder_SyncRead(void);
+  void Read_Dxl_Encoder_Once(int *Encoder_array);
 };
 
 

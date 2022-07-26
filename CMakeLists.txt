@@ -124,6 +124,7 @@ include_directories(
 ## Declare a C++ library
  add_library(${PROJECT_NAME}
    src/dxl_controller.cpp
+   src/kubot_sync_read_write.cpp
  )
 
 ## Add cmake target dependencies of the library

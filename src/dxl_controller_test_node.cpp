@@ -10,13 +10,13 @@ int main(int argc, char **argv)
   ros::NodeHandle nh;
 
   ros::Publisher chatter_pub = nh.advertise<std_msgs::String>("chatter", 1000);
+
   dxl_controller x;
 
   x.Initialize();
   //x.setJointIdFrom_yaml("/home/ola/catkin_ws/src/kubot_dxl_controller/config/joint_id.yaml");
-  x.getJointIdFrom_yaml(JOINT_ID_FILEPATH);
-  x.ping_dxls();
-
+  //x.getJointIdFrom_yaml(JOINT_ID_FILEPATH);
+  //x.ping_dxls();
 
   ros::Rate loop_rate(10);
   while (ros::ok())
