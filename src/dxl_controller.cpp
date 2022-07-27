@@ -1,38 +1,14 @@
+/* Author: Park Kiwoong (KUDOS 8th) */
+
 #include "kubot_dxl_controller/dxl_controller.h"
-
-#define TXPACKET_MAX_LEN    (1*1024)
-#define RXPACKET_MAX_LEN    (1*1024)
-
-///////////////// for Protocol 2.0 Packet /////////////////
-#define PKT_HEADER0             0
-#define PKT_HEADER1             1
-#define PKT_HEADER2             2
-#define PKT_RESERVED            3
-#define PKT_ID                  4
-#define PKT_LENGTH_L            5
-#define PKT_LENGTH_H            6
-#define PKT_INSTRUCTION         7
-#define PKT_ERROR               8
-#define PKT_PARAMETER0          8
-
-///////////////// Protocol 2.0 Error bit /////////////////
-#define ERRNUM_RESULT_FAIL      1       // Failed to process the instruction packet.
-#define ERRNUM_INSTRUCTION      2       // Instruction error
-#define ERRNUM_CRC              3       // CRC check error
-#define ERRNUM_DATA_RANGE       4       // Data range error
-#define ERRNUM_DATA_LENGTH      5       // Data length error
-#define ERRNUM_DATA_LIMIT       6       // Data limit error
-#define ERRNUM_ACCESS           7       // Access error
-
-#define ERRBIT_ALERT            128     //When the device has a problem, this bit is set to 1. Check "Device Status Check" value.
 
 
 //DXL SDK
 dynamixel::PortHandler *portHandler = dynamixel::PortHandler::getPortHandler(DEVICENAME);
 dynamixel::PacketHandler *packetHandler = dynamixel::PacketHandler::getPacketHandler(PROTOCOL_VERSION);
-dynamixel::GroupSyncWrite groupSyncWrite(portHandler, packetHandler, ADDR_GOAL_POSITION, LEN_GOAL_POSITION);
+//dynamixel::GroupSyncWrite groupSyncWrite(portHandler, packetHandler, ADDR_GOAL_POSITION, LEN_GOAL_POSITION);
 dynamixel::GroupSyncRead groupSyncRead(portHandler, packetHandler, ADDR_PRESENT_POSITION, LEN_PRESENT_POSITION);
-
+K_GroupSyncWrite k_groupSyncWrite(portHandler, packetHandler, ADDR_GOAL_POSITION, LEN_GOAL_POSITION);
 
 bool dxl_controller::Initialize(void){
   // Open port
@@ -329,5 +305,41 @@ void dxl_controller::Read_Dxl_Encoder_Once(int *Encoder_array){  // inappropriat
   }
   Encoder_array = Encoder_value; //Encoder Output
 }
+void dxl_controller::Sync_Position_command_TxOnly(int (&dxl_goal_posi)[TOTAL_DXL_NUM]){
 
+  /*** [ CAUTION!!] ********************************************************************************************
+   * 'dxl_goal_posi[]' is a array of joint positions
+   * 'dxl_goal_posi[]' must be passed to this function in the following format.
+   * int dxl_goal_posi[TOTAL_DXL_NUM] = {ID1_dxl's posi, ID2'2 posi, ID3's posi, ... , ID(TOTAL_DXL_NUM)'s posi};
+   *************************************************************************************************************/
 
+  bool dxl_addparam_result = false;                // addParam result
+  int dxl_comm_result = COMM_TX_FAIL;             // Communication result
+
+  uint8_t param_goal_position[4];
+
+  std::map<std::string,int>::iterator iter;
+  for(iter = joints.begin();iter!=joints.end();iter++){
+    int dxl_id = iter->second;
+    int dxl_goal_position = dxl_goal_posi[dxl_id-1];
+
+    // Allocate goal position value into byte array
+    param_goal_position[0] = DXL_LOBYTE(DXL_LOWORD(dxl_goal_position));
+    param_goal_position[1] = DXL_HIBYTE(DXL_LOWORD(dxl_goal_position));
+    param_goal_position[2] = DXL_LOBYTE(DXL_HIWORD(dxl_goal_position));
+    param_goal_position[3] = DXL_HIBYTE(DXL_HIWORD(dxl_goal_position));
+
+    dxl_addparam_result = k_groupSyncWrite.addParam(dxl_id, param_goal_position);
+    if (dxl_addparam_result != true)
+    {
+      ROS_ERROR("[ID:%03d] k_groupSyncWrite addparam failed", dxl_id);
+      return;
+    }
+  }
+  // Syncwrite goal position
+  dxl_comm_result = k_groupSyncWrite.txPacket();
+  if (dxl_comm_result != COMM_SUCCESS) packetHandler->getTxRxResult(dxl_comm_result);
+
+  // Clear syncwrite parameter storage
+  k_groupSyncWrite.clearParam();
+}

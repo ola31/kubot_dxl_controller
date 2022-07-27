@@ -1,3 +1,5 @@
+/* Author: Park Kiwoong (KUDOS 8th) */
+
 #include "ros/ros.h"
 #include "std_msgs/String.h"
 #include "kubot_dxl_controller/dxl_controller.h"
@@ -13,10 +15,11 @@ int main(int argc, char **argv)
 
   dxl_controller x;
 
-  x.Initialize();
-  //x.setJointIdFrom_yaml("/home/ola/catkin_ws/src/kubot_dxl_controller/config/joint_id.yaml");
+
+  //x.Initialize();
+  //x.Read_Dxl_Encoder_Once(encoder_read);
   //x.getJointIdFrom_yaml(JOINT_ID_FILEPATH);
-  //x.ping_dxls();
+  //x.Sync_Position_command_TxOnly(encoder_read);
 
   ros::Rate loop_rate(10);
   while (ros::ok())

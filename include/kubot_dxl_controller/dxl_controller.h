@@ -12,6 +12,8 @@
 #include <string>
 #include <ros/package.h>
 
+#include "kubot_dxl_controller/k_group_sync_write.h"
+
 
 
 //Dynamixel Control
@@ -33,8 +35,10 @@
 #define LEN_GOAL_POSITION            4
 #define LEN_PRESENT_POSITION         4
 
+/****** may need to modified if robot has arms and head *****/
 #define LEG_DOF                      6  //leg demension of freedom
 #define TOTAL_DXL_NUM               12  //this must be modified if robot has more than 12 dxls
+/************************************************************/
 
 #define JOINT_ID_FILEPATH         "/config/joint_id.yaml"
 #define JOINT_PD_GAIN_FILEPATH    "/config/joint_PD_gain.yaml"
@@ -49,8 +53,10 @@ private:
   std::map<std::string,int> jointP_gain; //name:P gain
   std::map<std::string,int> jointD_gain; //name:D gain
 
+  /****** may need to modified if robot has arms and head *****/
   const std::string left_joint_name[LEG_DOF] = {"left_hip_yaw","left_hip_roll","left_hip_pitch","left_knee","left_ankle_pitch","left_ankle_roll"};
   const std::string right_joint_name[LEG_DOF] = {"right_hip_yaw","right_hip_roll","right_hip_pitch","right_knee","right_ankle_pitch","right_ankle_roll"};
+  /************************************************************/
 
   const std::string pkg_path = ros::package::getPath("kubot_dxl_controller");  //get package path
 
@@ -68,6 +74,7 @@ public:
   bool setDXL_PD_gain(void);
   void set_Dxl_Encoder_SyncRead(void);
   void Read_Dxl_Encoder_Once(int *Encoder_array);
+  void Sync_Position_command_TxOnly(int (&dxl_goal_posi)[TOTAL_DXL_NUM]);
 };
 
 
