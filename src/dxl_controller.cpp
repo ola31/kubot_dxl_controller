@@ -5,7 +5,8 @@
 
 //DXL SDK
 dynamixel::PortHandler *portHandler = dynamixel::PortHandler::getPortHandler(DEVICENAME);
-dynamixel::PacketHandler *packetHandler = dynamixel::PacketHandler::getPacketHandler(PROTOCOL_VERSION);
+//dynamixel::PacketHandler *packetHandler = dynamixel::PacketHandler::getPacketHandler(PROTOCOL_VERSION);
+dynamixel::PacketHandler *packetHandler = (dynamixel::PacketHandler *)(kubot_sync_read_write::getInstance());
 //dynamixel::GroupSyncWrite groupSyncWrite(portHandler, packetHandler, ADDR_GOAL_POSITION, LEN_GOAL_POSITION);
 dynamixel::GroupSyncRead groupSyncRead(portHandler, packetHandler, ADDR_PRESENT_POSITION, LEN_PRESENT_POSITION);
 K_GroupSyncWrite k_groupSyncWrite(portHandler, packetHandler, ADDR_GOAL_POSITION, LEN_GOAL_POSITION);
@@ -337,8 +338,11 @@ void dxl_controller::Sync_Position_command_TxOnly(int (&dxl_goal_posi)[TOTAL_DXL
       return;
     }
   }
+  //ROS_INFO("dd");
   // Syncwrite goal position
-  dxl_comm_result = k_groupSyncWrite.txPacket();
+   //k_groupSyncWrite.clearParam();
+  dxl_comm_result = k_groupSyncWrite.txPacket1();
+   //ROS_INFO("ddd");
   if (dxl_comm_result != COMM_SUCCESS) packetHandler->getTxRxResult(dxl_comm_result);
 
   // Clear syncwrite parameter storage

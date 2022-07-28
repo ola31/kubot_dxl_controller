@@ -26,6 +26,85 @@
 
 #define ERRBIT_ALERT            128     //When the device has a problem, this bit is set to 1. Check "Device Status Check" value.
 
+//using namespace dynamixel;
+
+kubot_sync_read_write *kubot_sync_read_write::unique_instance_ = new kubot_sync_read_write();
+
+kubot_sync_read_write::kubot_sync_read_write() { }
+
+const char *kubot_sync_read_write::getTxRxResult(int result)
+{
+  switch(result)
+  {
+    case COMM_SUCCESS:
+      return "[TxRxResult] Communication success.";
+
+    case COMM_PORT_BUSY:
+      return "[TxRxResult] Port is in use!";
+
+    case COMM_TX_FAIL:
+      return "[TxRxResult] Failed transmit instruction packet!";
+
+    case COMM_RX_FAIL:
+      return "[TxRxResult] Failed get status packet from device!";
+
+    case COMM_TX_ERROR:
+      return "[TxRxResult] Incorrect instruction packet!";
+
+    case COMM_RX_WAITING:
+      return "[TxRxResult] Now recieving status packet!";
+
+    case COMM_RX_TIMEOUT:
+      return "[TxRxResult] There is no status packet!";
+
+    case COMM_RX_CORRUPT:
+      return "[TxRxResult] Incorrect status packet!";
+
+    case COMM_NOT_AVAILABLE:
+      return "[TxRxResult] Protocol does not support This function!";
+
+    default:
+      return "";
+  }
+}
+
+const char *kubot_sync_read_write::getRxPacketError(uint8_t error)
+{
+  if (error & ERRBIT_ALERT)
+    return "[RxPacketError] Hardware error occurred. Check the error at Control Table (Hardware Error Status)!";
+
+  int not_alert_error = error & ~ERRBIT_ALERT;
+
+  switch(not_alert_error)
+  {
+    case 0:
+      return "";
+
+    case ERRNUM_RESULT_FAIL:
+      return "[RxPacketError] Failed to process the instruction packet!";
+
+    case ERRNUM_INSTRUCTION:
+      return "[RxPacketError] Undefined instruction or incorrect instruction!";
+
+    case ERRNUM_CRC:
+      return "[RxPacketError] CRC doesn't match!";
+
+    case ERRNUM_DATA_RANGE:
+      return "[RxPacketError] The data value is out of range!";
+
+    case ERRNUM_DATA_LENGTH:
+      return "[RxPacketError] The data length does not match as expected!";
+
+    case ERRNUM_DATA_LIMIT:
+      return "[RxPacketError] The data value exceeds the limit value!";
+
+    case ERRNUM_ACCESS:
+      return "[RxPacketError] Writing or Reading is not available to target address!";
+
+    default:
+      return "[RxPacketError] Unknown error code!";
+  }
+}
 
 unsigned short kubot_sync_read_write::updateCRC(uint16_t crc_accum, uint8_t *data_blk_ptr, uint16_t data_blk_size)
 {
@@ -148,7 +227,7 @@ void kubot_sync_read_write::removeStuffing(uint8_t *packet)
 }
 
 
-int kubot_sync_read_write::txPacket(PortHandler *port, uint8_t *txpacket)
+int kubot_sync_read_write::txPacket(dynamixel::PortHandler *port, uint8_t *txpacket)
 {
   uint16_t total_packet_length   = 0;
   uint16_t written_packet_length = 0;
@@ -192,7 +271,665 @@ int kubot_sync_read_write::txPacket(PortHandler *port, uint8_t *txpacket)
   return COMM_SUCCESS;
 }
 
-int kubot_sync_read_write::syncWriteTxOnly(PortHandler *port, uint16_t start_address, uint16_t data_length, uint8_t *param, uint16_t param_length)
+int kubot_sync_read_write::rxPacket(dynamixel::PortHandler *port, uint8_t *rxpacket)
+{
+  int     result         = COMM_TX_FAIL;
+
+  uint16_t rx_length     = 0;
+  uint16_t wait_length   = 11; // minimum length (HEADER0 HEADER1 HEADER2 RESERVED ID LENGTH_L LENGTH_H INST ERROR CRC16_L CRC16_H)
+
+  while(true)
+  {
+    rx_length += port->readPort(&rxpacket[rx_length], wait_length - rx_length);
+    if (rx_length >= wait_length)
+    {
+      uint16_t idx = 0;
+
+      // find packet header
+      for (idx = 0; idx < (rx_length - 3); idx++)
+      {
+        if ((rxpacket[idx] == 0xFF) && (rxpacket[idx+1] == 0xFF) && (rxpacket[idx+2] == 0xFD) && (rxpacket[idx+3] != 0xFD))
+          break;
+      }
+
+      if (idx == 0)   // found at the beginning of the packet
+      {
+        if (rxpacket[PKT_RESERVED] != 0x00 ||
+           rxpacket[PKT_ID] > 0xFC ||
+           DXL_MAKEWORD(rxpacket[PKT_LENGTH_L], rxpacket[PKT_LENGTH_H]) > RXPACKET_MAX_LEN ||
+           rxpacket[PKT_INSTRUCTION] != 0x55)
+        {
+          // remove the first byte in the packet
+          for (uint16_t s = 0; s < rx_length - 1; s++)
+            rxpacket[s] = rxpacket[1 + s];
+          //memcpy(&rxpacket[0], &rxpacket[idx], rx_length - idx);
+          rx_length -= 1;
+          continue;
+        }
+
+        // re-calculate the exact length of the rx packet
+        if (wait_length != DXL_MAKEWORD(rxpacket[PKT_LENGTH_L], rxpacket[PKT_LENGTH_H]) + PKT_LENGTH_H + 1)
+        {
+          wait_length = DXL_MAKEWORD(rxpacket[PKT_LENGTH_L], rxpacket[PKT_LENGTH_H]) + PKT_LENGTH_H + 1;
+          continue;
+        }
+
+        if (rx_length < wait_length)
+        {
+          // check timeout
+          if (port->isPacketTimeout() == true)
+          {
+            if (rx_length == 0)
+            {
+              result = COMM_RX_TIMEOUT;
+            }
+            else
+            {
+              result = COMM_RX_CORRUPT;
+            }
+            break;
+          }
+          else
+          {
+            continue;
+          }
+        }
+
+        // verify CRC16
+        uint16_t crc = DXL_MAKEWORD(rxpacket[wait_length-2], rxpacket[wait_length-1]);
+        if (updateCRC(0, rxpacket, wait_length - 2) == crc)
+        {
+          result = COMM_SUCCESS;
+        }
+        else
+        {
+          result = COMM_RX_CORRUPT;
+        }
+        break;
+      }
+      else
+      {
+        // remove unnecessary packets
+        for (uint16_t s = 0; s < rx_length - idx; s++)
+          rxpacket[s] = rxpacket[idx + s];
+        //memcpy(&rxpacket[0], &rxpacket[idx], rx_length - idx);
+        rx_length -= idx;
+      }
+    }
+    else
+    {
+      // check timeout
+      if (port->isPacketTimeout() == true)
+      {
+        if (rx_length == 0)
+        {
+          result = COMM_RX_TIMEOUT;
+        }
+        else
+        {
+          result = COMM_RX_CORRUPT;
+        }
+        break;
+      }
+    }
+#if defined(__linux__) || defined(__APPLE__)
+    usleep(0);
+#elif defined(_WIN32) || defined(_WIN64)
+    Sleep(0);
+#endif
+  }
+  port->is_using_ = false;
+
+  if (result == COMM_SUCCESS)
+    removeStuffing(rxpacket);
+
+  return result;
+}
+
+// NOT for BulkRead / SyncRead instruction
+int kubot_sync_read_write::txRxPacket(dynamixel::PortHandler *port, uint8_t *txpacket, uint8_t *rxpacket, uint8_t *error)
+{
+  int result = COMM_TX_FAIL;
+
+  // tx packet
+  result = txPacket(port, txpacket);
+  if (result != COMM_SUCCESS)
+    return result;
+
+  // (Instruction == BulkRead or SyncRead) == this function is not available.
+  if (txpacket[PKT_INSTRUCTION] == INST_BULK_READ || txpacket[PKT_INSTRUCTION] == INST_SYNC_READ)
+    result = COMM_NOT_AVAILABLE;
+
+  // (ID == Broadcast ID) == no need to wait for status packet or not available.
+  // (Instruction == action) == no need to wait for status packet
+  if (txpacket[PKT_ID] == BROADCAST_ID || txpacket[PKT_INSTRUCTION] == INST_ACTION)
+  {
+    port->is_using_ = false;
+    return result;
+  }
+
+  // set packet timeout
+  if (txpacket[PKT_INSTRUCTION] == INST_READ)
+  {
+    port->setPacketTimeout((uint16_t)(DXL_MAKEWORD(txpacket[PKT_PARAMETER0+2], txpacket[PKT_PARAMETER0+3]) + 11));
+  }
+  else
+  {
+    port->setPacketTimeout((uint16_t)11);
+    // HEADER0 HEADER1 HEADER2 RESERVED ID LENGTH_L LENGTH_H INST ERROR CRC16_L CRC16_H
+  }
+
+  // rx packet
+  do {
+    result = rxPacket(port, rxpacket);
+  } while (result == COMM_SUCCESS && txpacket[PKT_ID] != rxpacket[PKT_ID]);
+
+  if (result == COMM_SUCCESS && txpacket[PKT_ID] == rxpacket[PKT_ID])
+  {
+    if (error != 0)
+      *error = (uint8_t)rxpacket[PKT_ERROR];
+  }
+
+  return result;
+}
+
+int kubot_sync_read_write::ping(dynamixel::PortHandler *port, uint8_t id, uint8_t *error)
+{
+  return ping(port, id, 0, error);
+}
+int kubot_sync_read_write::ping(dynamixel::PortHandler *port, uint8_t id, uint16_t *model_number, uint8_t *error)
+{
+  int result                 = COMM_TX_FAIL;
+
+  uint8_t txpacket[10]        = {0};
+  uint8_t rxpacket[14]        = {0};
+
+  if (id >= BROADCAST_ID)
+    return COMM_NOT_AVAILABLE;
+
+  txpacket[PKT_ID]            = id;
+  txpacket[PKT_LENGTH_L]      = 3;
+  txpacket[PKT_LENGTH_H]      = 0;
+  txpacket[PKT_INSTRUCTION]   = INST_PING;
+
+  result = txRxPacket(port, txpacket, rxpacket, error);
+  if (result == COMM_SUCCESS && model_number != 0)
+    *model_number = DXL_MAKEWORD(rxpacket[PKT_PARAMETER0+1], rxpacket[PKT_PARAMETER0+2]);
+
+  return result;
+}
+
+int kubot_sync_read_write::broadcastPing(dynamixel::PortHandler *port, std::vector<uint8_t> &id_list)
+{
+  const int STATUS_LENGTH     = 14;
+  int result                  = COMM_TX_FAIL;
+
+  id_list.clear();
+
+  uint16_t rx_length          = 0;
+  uint16_t wait_length        = STATUS_LENGTH * MAX_ID;
+
+  uint8_t txpacket[10]        = {0};
+  uint8_t rxpacket[STATUS_LENGTH * MAX_ID] = {0};
+
+  double tx_time_per_byte = (1000.0 / (double)port->getBaudRate()) * 10.0;
+
+  txpacket[PKT_ID]            = BROADCAST_ID;
+  txpacket[PKT_LENGTH_L]      = 3;
+  txpacket[PKT_LENGTH_H]      = 0;
+  txpacket[PKT_INSTRUCTION]   = INST_PING;
+
+  result = txPacket(port, txpacket);
+  if (result != COMM_SUCCESS)
+  {
+    port->is_using_ = false;
+    return result;
+  }
+
+  // set rx timeout
+  //port->setPacketTimeout((uint16_t)(wait_length * 30));
+  port->setPacketTimeout(((double)wait_length * tx_time_per_byte) + (3.0 * (double)MAX_ID) + 16.0);
+
+  while(1)
+  {
+    rx_length += port->readPort(&rxpacket[rx_length], wait_length - rx_length);
+    if (port->isPacketTimeout() == true)// || rx_length >= wait_length)
+      break;
+  }
+
+  port->is_using_ = false;
+
+  if (rx_length == 0)
+    return COMM_RX_TIMEOUT;
+
+  while(1)
+  {
+    if (rx_length < STATUS_LENGTH)
+      return COMM_RX_CORRUPT;
+
+    uint16_t idx = 0;
+
+    // find packet header
+    for (idx = 0; idx < (rx_length - 2); idx++)
+    {
+      if (rxpacket[idx] == 0xFF && rxpacket[idx+1] == 0xFF && rxpacket[idx+2] == 0xFD)
+        break;
+    }
+
+    if (idx == 0)   // found at the beginning of the packet
+    {
+      // verify CRC16
+      uint16_t crc = DXL_MAKEWORD(rxpacket[STATUS_LENGTH-2], rxpacket[STATUS_LENGTH-1]);
+
+      if (updateCRC(0, rxpacket, STATUS_LENGTH - 2) == crc)
+      {
+        result = COMM_SUCCESS;
+
+        id_list.push_back(rxpacket[PKT_ID]);
+
+        for (uint16_t s = 0; s < rx_length - STATUS_LENGTH; s++)
+          rxpacket[s] = rxpacket[STATUS_LENGTH + s];
+        rx_length -= STATUS_LENGTH;
+
+        if (rx_length == 0)
+          return result;
+      }
+      else
+      {
+        result = COMM_RX_CORRUPT;
+
+        // remove header (0xFF 0xFF 0xFD)
+        for (uint16_t s = 0; s < rx_length - 3; s++)
+          rxpacket[s] = rxpacket[3 + s];
+        rx_length -= 3;
+      }
+    }
+    else
+    {
+      // remove unnecessary packets
+      for (uint16_t s = 0; s < rx_length - idx; s++)
+        rxpacket[s] = rxpacket[idx + s];
+      rx_length -= idx;
+    }
+  }
+
+  return result;
+}
+
+int kubot_sync_read_write::action(dynamixel::PortHandler *port, uint8_t id)
+{
+  uint8_t txpacket[10]        = {0};
+
+  txpacket[PKT_ID]            = id;
+  txpacket[PKT_LENGTH_L]      = 3;
+  txpacket[PKT_LENGTH_H]      = 0;
+  txpacket[PKT_INSTRUCTION]   = INST_ACTION;
+
+  return txRxPacket(port, txpacket, 0);
+}
+
+int kubot_sync_read_write::reboot(dynamixel::PortHandler *port, uint8_t id, uint8_t *error)
+{
+  uint8_t txpacket[10]        = {0};
+  uint8_t rxpacket[11]        = {0};
+
+  txpacket[PKT_ID]            = id;
+  txpacket[PKT_LENGTH_L]      = 3;
+  txpacket[PKT_LENGTH_H]      = 0;
+  txpacket[PKT_INSTRUCTION]   = INST_REBOOT;
+
+  return txRxPacket(port, txpacket, rxpacket, error);
+}
+
+int kubot_sync_read_write::clearMultiTurn(dynamixel::PortHandler *port, uint8_t id, uint8_t *error)
+{
+  uint8_t txpacket[15]        = {0};
+  uint8_t rxpacket[11]        = {0};
+
+  txpacket[PKT_ID]            = id;
+  txpacket[PKT_LENGTH_L]      = 8;
+  txpacket[PKT_LENGTH_H]      = 0;
+  txpacket[PKT_INSTRUCTION]   = INST_CLEAR;
+  txpacket[PKT_PARAMETER0]    = 0x01;
+  txpacket[PKT_PARAMETER0+1]  = 0x44;
+  txpacket[PKT_PARAMETER0+2]  = 0x58;
+  txpacket[PKT_PARAMETER0+3]  = 0x4C;
+  txpacket[PKT_PARAMETER0+4]  = 0x22;
+
+  return txRxPacket(port, txpacket, rxpacket, error);
+}
+int kubot_sync_read_write::factoryReset(dynamixel::PortHandler *port, uint8_t id, uint8_t option, uint8_t *error)
+{
+  uint8_t txpacket[11]        = {0};
+  uint8_t rxpacket[11]        = {0};
+
+  txpacket[PKT_ID]            = id;
+  txpacket[PKT_LENGTH_L]      = 4;
+  txpacket[PKT_LENGTH_H]      = 0;
+  txpacket[PKT_INSTRUCTION]   = INST_FACTORY_RESET;
+  txpacket[PKT_PARAMETER0]    = option;
+
+  return txRxPacket(port, txpacket, rxpacket, error);
+}
+
+int kubot_sync_read_write::readTx(dynamixel::PortHandler *port, uint8_t id, uint16_t address, uint16_t length)
+{
+  int result                 = COMM_TX_FAIL;
+
+  uint8_t txpacket[14]        = {0};
+
+  if (id >= BROADCAST_ID)
+    return COMM_NOT_AVAILABLE;
+
+  txpacket[PKT_ID]            = id;
+  txpacket[PKT_LENGTH_L]      = 7;
+  txpacket[PKT_LENGTH_H]      = 0;
+  txpacket[PKT_INSTRUCTION]   = INST_READ;
+  txpacket[PKT_PARAMETER0+0]  = (uint8_t)DXL_LOBYTE(address);
+  txpacket[PKT_PARAMETER0+1]  = (uint8_t)DXL_HIBYTE(address);
+  txpacket[PKT_PARAMETER0+2]  = (uint8_t)DXL_LOBYTE(length);
+  txpacket[PKT_PARAMETER0+3]  = (uint8_t)DXL_HIBYTE(length);
+
+  result = txPacket(port, txpacket);
+
+  // set packet timeout
+  if (result == COMM_SUCCESS)
+    port->setPacketTimeout((uint16_t)(length + 11));
+
+  return result;
+}
+
+int kubot_sync_read_write::readRx(dynamixel::PortHandler *port, uint8_t id, uint16_t length, uint8_t *data, uint8_t *error)
+{
+  int result                  = COMM_TX_FAIL;
+  uint8_t *rxpacket           = (uint8_t *)malloc(RXPACKET_MAX_LEN);
+  //(length + 11 + (length/3));  // (length/3): consider stuffing
+
+  if (rxpacket == NULL)
+    return result;
+
+  do {
+    result = rxPacket(port, rxpacket);
+  } while (result == COMM_SUCCESS && rxpacket[PKT_ID] != id);
+
+  if (result == COMM_SUCCESS && rxpacket[PKT_ID] == id)
+  {
+    if (error != 0)
+      *error = (uint8_t)rxpacket[PKT_ERROR];
+
+    for (uint16_t s = 0; s < length; s++)
+    {
+      data[s] = rxpacket[PKT_PARAMETER0 + 1 + s];
+    }
+    //memcpy(data, &rxpacket[PKT_PARAMETER0+1], length);
+  }
+
+  free(rxpacket);
+  //delete[] rxpacket;
+  return result;
+}
+
+int kubot_sync_read_write::readTxRx(dynamixel::PortHandler *port, uint8_t id, uint16_t address, uint16_t length, uint8_t *data, uint8_t *error)
+{
+  int result                  = COMM_TX_FAIL;
+
+  uint8_t txpacket[14]        = {0};
+  uint8_t *rxpacket           = (uint8_t *)malloc(RXPACKET_MAX_LEN);
+  //(length + 11 + (length/3));  // (length/3): consider stuffing
+
+  if (rxpacket == NULL)
+    return result;
+
+  if (id >= BROADCAST_ID)
+  {
+    free(rxpacket);
+    return COMM_NOT_AVAILABLE;
+  }
+
+  txpacket[PKT_ID]            = id;
+  txpacket[PKT_LENGTH_L]      = 7;
+  txpacket[PKT_LENGTH_H]      = 0;
+  txpacket[PKT_INSTRUCTION]   = INST_READ;
+  txpacket[PKT_PARAMETER0+0]  = (uint8_t)DXL_LOBYTE(address);
+  txpacket[PKT_PARAMETER0+1]  = (uint8_t)DXL_HIBYTE(address);
+  txpacket[PKT_PARAMETER0+2]  = (uint8_t)DXL_LOBYTE(length);
+  txpacket[PKT_PARAMETER0+3]  = (uint8_t)DXL_HIBYTE(length);
+
+  result = txRxPacket(port, txpacket, rxpacket, error);
+  if (result == COMM_SUCCESS)
+  {
+    if (error != 0)
+      *error = (uint8_t)rxpacket[PKT_ERROR];
+
+    for (uint16_t s = 0; s < length; s++)
+    {
+      data[s] = rxpacket[PKT_PARAMETER0 + 1 + s];
+    }
+    //memcpy(data, &rxpacket[PKT_PARAMETER0+1], length);
+  }
+
+  free(rxpacket);
+  //delete[] rxpacket;
+  return result;
+}
+
+int kubot_sync_read_write::read1ByteTx(dynamixel::PortHandler *port, uint8_t id, uint16_t address)
+{
+  return readTx(port, id, address, 1);
+}
+
+int kubot_sync_read_write::read1ByteRx(dynamixel::PortHandler *port, uint8_t id, uint8_t *data, uint8_t *error)
+{
+  uint8_t data_read[1] = {0};
+  int result = readRx(port, id, 1, data_read, error);
+  if (result == COMM_SUCCESS)
+    *data = data_read[0];
+  return result;
+}
+
+int kubot_sync_read_write::read1ByteTxRx(dynamixel::PortHandler *port, uint8_t id, uint16_t address, uint8_t *data, uint8_t *error)
+{
+  uint8_t data_read[1] = {0};
+  int result = readTxRx(port, id, address, 1, data_read, error);
+  if (result == COMM_SUCCESS)
+    *data = data_read[0];
+  return result;
+}
+
+int kubot_sync_read_write::read2ByteTx(dynamixel::PortHandler *port, uint8_t id, uint16_t address)
+{
+  return readTx(port, id, address, 2);
+}
+
+int kubot_sync_read_write::read2ByteRx(dynamixel::PortHandler *port, uint8_t id, uint16_t *data, uint8_t *error)
+{
+  uint8_t data_read[2] = {0};
+  int result = readRx(port, id, 2, data_read, error);
+  if (result == COMM_SUCCESS)
+    *data = DXL_MAKEWORD(data_read[0], data_read[1]);
+  return result;
+}
+int kubot_sync_read_write::read2ByteTxRx(dynamixel::PortHandler *port, uint8_t id, uint16_t address, uint16_t *data, uint8_t *error)
+{
+  uint8_t data_read[2] = {0};
+  int result = readTxRx(port, id, address, 2, data_read, error);
+  if (result == COMM_SUCCESS)
+    *data = DXL_MAKEWORD(data_read[0], data_read[1]);
+  return result;
+}
+
+
+int kubot_sync_read_write::read4ByteTx(dynamixel::PortHandler *port, uint8_t id, uint16_t address)
+{
+  return readTx(port, id, address, 4);
+}
+
+int kubot_sync_read_write::read4ByteRx(dynamixel::PortHandler *port, uint8_t id, uint32_t *data, uint8_t *error)
+{
+  uint8_t data_read[4] = {0};
+  int result = readRx(port, id, 4, data_read, error);
+  if (result == COMM_SUCCESS)
+    *data = DXL_MAKEDWORD(DXL_MAKEWORD(data_read[0], data_read[1]), DXL_MAKEWORD(data_read[2], data_read[3]));
+  return result;
+}
+
+int kubot_sync_read_write::read4ByteTxRx(dynamixel::PortHandler *port, uint8_t id, uint16_t address, uint32_t *data, uint8_t *error)
+{
+  uint8_t data_read[4] = {0};
+  int result = readTxRx(port, id, address, 4, data_read, error);
+  if (result == COMM_SUCCESS)
+    *data = DXL_MAKEDWORD(DXL_MAKEWORD(data_read[0], data_read[1]), DXL_MAKEWORD(data_read[2], data_read[3]));
+  return result;
+}
+
+int kubot_sync_read_write::writeTxOnly(dynamixel::PortHandler *port, uint8_t id, uint16_t address, uint16_t length, uint8_t *data)
+{
+  int result                  = COMM_TX_FAIL;
+
+  uint8_t *txpacket           = (uint8_t *)malloc(length + 12 + (length / 3));
+
+  if (txpacket == NULL)
+    return result;
+
+  txpacket[PKT_ID]            = id;
+  txpacket[PKT_LENGTH_L]      = DXL_LOBYTE(length+5);
+  txpacket[PKT_LENGTH_H]      = DXL_HIBYTE(length+5);
+  txpacket[PKT_INSTRUCTION]   = INST_WRITE;
+  txpacket[PKT_PARAMETER0+0]  = (uint8_t)DXL_LOBYTE(address);
+  txpacket[PKT_PARAMETER0+1]  = (uint8_t)DXL_HIBYTE(address);
+
+  for (uint16_t s = 0; s < length; s++)
+    txpacket[PKT_PARAMETER0+2+s] = data[s];
+  //memcpy(&txpacket[PKT_PARAMETER0+2], data, length);
+
+  result = txPacket(port, txpacket);
+  port->is_using_ = false;
+
+  free(txpacket);
+  //delete[] txpacket;
+  return result;
+}
+
+int kubot_sync_read_write::writeTxRx(dynamixel::PortHandler *port, uint8_t id, uint16_t address, uint16_t length, uint8_t *data, uint8_t *error)
+{
+  int result                  = COMM_TX_FAIL;
+
+  uint8_t *txpacket           = (uint8_t *)malloc(length + 12 + (length / 3));
+  uint8_t rxpacket[11]        = {0};
+
+  if (txpacket == NULL)
+    return result;
+
+  txpacket[PKT_ID]            = id;
+  txpacket[PKT_LENGTH_L]      = DXL_LOBYTE(length+5);
+  txpacket[PKT_LENGTH_H]      = DXL_HIBYTE(length+5);
+  txpacket[PKT_INSTRUCTION]   = INST_WRITE;
+  txpacket[PKT_PARAMETER0+0]  = (uint8_t)DXL_LOBYTE(address);
+  txpacket[PKT_PARAMETER0+1]  = (uint8_t)DXL_HIBYTE(address);
+
+  for (uint16_t s = 0; s < length; s++)
+    txpacket[PKT_PARAMETER0+2+s] = data[s];
+  //memcpy(&txpacket[PKT_PARAMETER0+2], data, length);
+
+  result = txRxPacket(port, txpacket, rxpacket, error);
+
+  free(txpacket);
+  //delete[] txpacket;
+  return result;
+}
+int kubot_sync_read_write::write1ByteTxOnly(dynamixel::PortHandler *port, uint8_t id, uint16_t address, uint8_t data)
+{
+  uint8_t data_write[1] = { data };
+  return writeTxOnly(port, id, address, 1, data_write);
+}
+
+int kubot_sync_read_write::write1ByteTxRx(dynamixel::PortHandler *port, uint8_t id, uint16_t address, uint8_t data, uint8_t *error)
+{
+  uint8_t data_write[1] = { data };
+  return writeTxRx(port, id, address, 1, data_write, error);
+}
+
+int kubot_sync_read_write::write2ByteTxOnly(dynamixel::PortHandler *port, uint8_t id, uint16_t address, uint16_t data)
+{
+  uint8_t data_write[2] = { DXL_LOBYTE(data), DXL_HIBYTE(data) };
+  return writeTxOnly(port, id, address, 2, data_write);
+}
+
+int kubot_sync_read_write::write2ByteTxRx(dynamixel::PortHandler *port, uint8_t id, uint16_t address, uint16_t data, uint8_t *error)
+{
+  uint8_t data_write[2] = { DXL_LOBYTE(data), DXL_HIBYTE(data) };
+  return writeTxRx(port, id, address, 2, data_write, error);
+}
+
+int kubot_sync_read_write::write4ByteTxOnly(dynamixel::PortHandler *port, uint8_t id, uint16_t address, uint32_t data)
+{
+  uint8_t data_write[4] = { DXL_LOBYTE(DXL_LOWORD(data)), DXL_HIBYTE(DXL_LOWORD(data)), DXL_LOBYTE(DXL_HIWORD(data)), DXL_HIBYTE(DXL_HIWORD(data)) };
+  return writeTxOnly(port, id, address, 4, data_write);
+}
+
+int kubot_sync_read_write::write4ByteTxRx(dynamixel::PortHandler *port, uint8_t id, uint16_t address, uint32_t data, uint8_t *error)
+{
+  uint8_t data_write[4] = { DXL_LOBYTE(DXL_LOWORD(data)), DXL_HIBYTE(DXL_LOWORD(data)), DXL_LOBYTE(DXL_HIWORD(data)), DXL_HIBYTE(DXL_HIWORD(data)) };
+  return writeTxRx(port, id, address, 4, data_write, error);
+}
+
+int kubot_sync_read_write::regWriteTxOnly(dynamixel::PortHandler *port, uint8_t id, uint16_t address, uint16_t length, uint8_t *data)
+{
+  int result                  = COMM_TX_FAIL;
+
+  uint8_t *txpacket           = (uint8_t *)malloc(length + 12 + (length / 3));
+
+  if (txpacket == NULL)
+    return result;
+
+  txpacket[PKT_ID]            = id;
+  txpacket[PKT_LENGTH_L]      = DXL_LOBYTE(length+5);
+  txpacket[PKT_LENGTH_H]      = DXL_HIBYTE(length+5);
+  txpacket[PKT_INSTRUCTION]   = INST_REG_WRITE;
+  txpacket[PKT_PARAMETER0+0]  = (uint8_t)DXL_LOBYTE(address);
+  txpacket[PKT_PARAMETER0+1]  = (uint8_t)DXL_HIBYTE(address);
+
+  for (uint16_t s = 0; s < length; s++)
+    txpacket[PKT_PARAMETER0+2+s] = data[s];
+  //memcpy(&txpacket[PKT_PARAMETER0+2], data, length);
+
+  result = txPacket(port, txpacket);
+  port->is_using_ = false;
+
+  free(txpacket);
+  //delete[] txpacket;
+  return result;
+}
+
+int kubot_sync_read_write::regWriteTxRx(dynamixel::PortHandler *port, uint8_t id, uint16_t address, uint16_t length, uint8_t *data, uint8_t *error)
+{
+  int result                  = COMM_TX_FAIL;
+
+  uint8_t *txpacket           = (uint8_t *)malloc(length + 12 + (length / 3));
+  uint8_t rxpacket[11]        = {0};
+
+  if (txpacket == NULL)
+    return result;
+
+  txpacket[PKT_ID]            = id;
+  txpacket[PKT_LENGTH_L]      = DXL_LOBYTE(length+5);
+  txpacket[PKT_LENGTH_H]      = DXL_HIBYTE(length+5);
+  txpacket[PKT_INSTRUCTION]   = INST_REG_WRITE;
+  txpacket[PKT_PARAMETER0+0]  = (uint8_t)DXL_LOBYTE(address);
+  txpacket[PKT_PARAMETER0+1]  = (uint8_t)DXL_HIBYTE(address);
+
+  for (uint16_t s = 0; s < length; s++)
+    txpacket[PKT_PARAMETER0+2+s] = data[s];
+  //memcpy(&txpacket[PKT_PARAMETER0+2], data, length);
+
+  result = txRxPacket(port, txpacket, rxpacket, error);
+
+  free(txpacket);
+  //delete[] txpacket;
+  return result;
+}
+
+int kubot_sync_read_write::syncReadTx(dynamixel::PortHandler *port, uint16_t start_address, uint16_t data_length, uint8_t *param, uint16_t param_length)
 {
   int result                  = COMM_TX_FAIL;
 
@@ -205,7 +942,7 @@ int kubot_sync_read_write::syncWriteTxOnly(PortHandler *port, uint16_t start_add
   txpacket[PKT_ID]            = BROADCAST_ID;
   txpacket[PKT_LENGTH_L]      = DXL_LOBYTE(param_length + 7); // 7: INST START_ADDR_L START_ADDR_H DATA_LEN_L DATA_LEN_H CRC16_L CRC16_H
   txpacket[PKT_LENGTH_H]      = DXL_HIBYTE(param_length + 7); // 7: INST START_ADDR_L START_ADDR_H DATA_LEN_L DATA_LEN_H CRC16_L CRC16_H
-  txpacket[PKT_INSTRUCTION]   = INST_SYNC_WRITE;
+  txpacket[PKT_INSTRUCTION]   = INST_SYNC_READ;
   txpacket[PKT_PARAMETER0+0]  = DXL_LOBYTE(start_address);
   txpacket[PKT_PARAMETER0+1]  = DXL_HIBYTE(start_address);
   txpacket[PKT_PARAMETER0+2]  = DXL_LOBYTE(data_length);
@@ -216,9 +953,106 @@ int kubot_sync_read_write::syncWriteTxOnly(PortHandler *port, uint16_t start_add
   //memcpy(&txpacket[PKT_PARAMETER0+4], param, param_length);
 
   result = txPacket(port, txpacket);
+  if (result == COMM_SUCCESS)
+    port->setPacketTimeout((uint16_t)((11 + data_length) * param_length));
+
+  free(txpacket);
+  return result;
+}
+
+
+
+int kubot_sync_read_write::syncWriteTxOnly(dynamixel::PortHandler *port, uint16_t start_address, uint16_t data_length, uint8_t *param, uint16_t param_length)
+{
+
+  int result                  = COMM_TX_FAIL;
+
+  uint8_t *txpacket           = (uint8_t *)malloc(param_length + 14 + (param_length / 3));
+  // 14: HEADER0 HEADER1 HEADER2 RESERVED ID LEN_L LEN_H INST START_ADDR_L START_ADDR_H DATA_LEN_L DATA_LEN_H CRC16_L CRC16_H
+
+  if (txpacket == NULL)
+    return result;
+  ROS_INFO("s");
+
+  txpacket[PKT_ID]            = BROADCAST_ID;
+  txpacket[PKT_LENGTH_L]      = DXL_LOBYTE(param_length + 7); // 7: INST START_ADDR_L START_ADDR_H DATA_LEN_L DATA_LEN_H CRC16_L CRC16_H
+  txpacket[PKT_LENGTH_H]      = DXL_HIBYTE(param_length + 7); // 7: INST START_ADDR_L START_ADDR_H DATA_LEN_L DATA_LEN_H CRC16_L CRC16_H
+  txpacket[PKT_INSTRUCTION]   = INST_SYNC_WRITE;
+  txpacket[PKT_PARAMETER0+0]  = DXL_LOBYTE(start_address);
+  txpacket[PKT_PARAMETER0+1]  = DXL_HIBYTE(start_address);
+  txpacket[PKT_PARAMETER0+2]  = DXL_LOBYTE(data_length);
+  txpacket[PKT_PARAMETER0+3]  = DXL_HIBYTE(data_length);
+  ROS_INFO("ss");
+
+  for (uint16_t s = 0; s < param_length; s++)
+    txpacket[PKT_PARAMETER0+4+s] = param[s];
+  //memcpy(&txpacket[PKT_PARAMETER0+4], param, param_length);
+  ROS_INFO("sss");
+  result = txPacket(port, txpacket);
 
   free(txpacket);
   //delete[] txpacket;
   return result;
 }
+
+
+int kubot_sync_read_write::bulkReadTx(dynamixel::PortHandler *port, uint8_t *param, uint16_t param_length)
+{
+  int result                  = COMM_TX_FAIL;
+
+  uint8_t *txpacket           = (uint8_t *)malloc(param_length + 10 + (param_length / 3));
+  // 10: HEADER0 HEADER1 HEADER2 RESERVED ID LEN_L LEN_H INST CRC16_L CRC16_H
+
+  if (txpacket == NULL)
+    return result;
+
+  txpacket[PKT_ID]            = BROADCAST_ID;
+  txpacket[PKT_LENGTH_L]      = DXL_LOBYTE(param_length + 3); // 3: INST CRC16_L CRC16_H
+  txpacket[PKT_LENGTH_H]      = DXL_HIBYTE(param_length + 3); // 3: INST CRC16_L CRC16_H
+  txpacket[PKT_INSTRUCTION]   = INST_BULK_READ;
+
+  for (uint16_t s = 0; s < param_length; s++)
+    txpacket[PKT_PARAMETER0+s] = param[s];
+  //memcpy(&txpacket[PKT_PARAMETER0], param, param_length);
+
+  result = txPacket(port, txpacket);
+  if (result == COMM_SUCCESS)
+  {
+    int wait_length = 0;
+    for (uint16_t i = 0; i < param_length; i += 5)
+      wait_length += DXL_MAKEWORD(param[i+3], param[i+4]) + 10;
+    port->setPacketTimeout((uint16_t)wait_length);
+  }
+
+  free(txpacket);
+  //delete[] txpacket;
+  return result;
+}
+
+int kubot_sync_read_write::bulkWriteTxOnly(dynamixel::PortHandler *port, uint8_t *param, uint16_t param_length)
+{
+  int result                  = COMM_TX_FAIL;
+
+  uint8_t *txpacket           = (uint8_t *)malloc(param_length + 10 + (param_length / 3));
+  // 10: HEADER0 HEADER1 HEADER2 RESERVED ID LEN_L LEN_H INST CRC16_L CRC16_H
+
+  if (txpacket == NULL)
+    return result;
+
+  txpacket[PKT_ID]            = BROADCAST_ID;
+  txpacket[PKT_LENGTH_L]      = DXL_LOBYTE(param_length + 3); // 3: INST CRC16_L CRC16_H
+  txpacket[PKT_LENGTH_H]      = DXL_HIBYTE(param_length + 3); // 3: INST CRC16_L CRC16_H
+  txpacket[PKT_INSTRUCTION]   = INST_BULK_WRITE;
+
+  for (uint16_t s = 0; s < param_length; s++)
+    txpacket[PKT_PARAMETER0+s] = param[s];
+  //memcpy(&txpacket[PKT_PARAMETER0], param, param_length);
+
+  result = txRxPacket(port, txpacket, 0, 0);
+
+  free(txpacket);
+  //delete[] txpacket;
+  return result;
+}
+
 

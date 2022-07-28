@@ -13,6 +13,7 @@
 #include <ros/package.h>
 
 #include "kubot_dxl_controller/k_group_sync_write.h"
+#include "kubot_dxl_controller/kubot_sync_read_write.h"
 
 
 

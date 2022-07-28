@@ -7,7 +7,6 @@
 #include <vector>
 #include "dynamixel_sdk/port_handler.h"
 #include "dynamixel_sdk/packet_handler.h"
-#include "kubot_dxl_controller/kubot_sync_read_write.h"
 
 //namespace dynamixel
 //{
@@ -17,12 +16,12 @@ using namespace dynamixel;
 ////////////////////////////////////////////////////////////////////////////////
 /// @brief The class for writing multiple Dynamixel data from same address with same length at once
 ////////////////////////////////////////////////////////////////////////////////
-class WINDECLSPEC K_GroupSyncWrite
+class K_GroupSyncWrite
 {
  private:
   PortHandler    *port_;
   PacketHandler  *ph_;
-  kubot_sync_read_write *k_ph;
+  //kubot_sync_read_write *k_ph;
 
   std::vector<uint8_t>            id_list_;
   std::map<uint8_t, uint8_t* >    data_list_; // <id, data>
@@ -99,7 +98,8 @@ class WINDECLSPEC K_GroupSyncWrite
   /// @return   when the list for Sync Write is empty
   /// @return or the other communication results which come from PacketHandler::syncWriteTxOnly
   ////////////////////////////////////////////////////////////////////////////////
-  int     txPacket();
+  int     txPacket1();
+
 };
 
 //}

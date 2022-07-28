@@ -7,6 +7,7 @@ using namespace dynamixel;
 K_GroupSyncWrite::K_GroupSyncWrite(PortHandler *port, PacketHandler *ph, uint16_t start_address, uint16_t data_length)
   : port_(port),
     ph_(ph),
+    //k_ph((kubot_sync_read_write)ph),
     is_param_changed_(false),
     param_(0),
     start_address_(start_address),
@@ -95,13 +96,19 @@ void K_GroupSyncWrite::clearParam()
   param_ = 0;
 }
 
-int K_GroupSyncWrite::txPacket()
+int K_GroupSyncWrite::txPacket1()
 {
+
   if (id_list_.size() == 0)
     return COMM_NOT_AVAILABLE;
+  //printf("dddd\n");
+
 
   if (is_param_changed_ == true || param_ == 0)
     makeParam();
 
-  return k_ph->syncWriteTxOnly(port_, start_address_, data_length_, param_, id_list_.size() * (1 + data_length_));
+  return ph_->syncWriteTxOnly(port_, start_address_, data_length_, param_, id_list_.size() * (1 + data_length_));
+
 }
+
+
