@@ -68,7 +68,7 @@ bool dxl_controller::Torque_ON_dxls(){
     else if (dxl_error != 0)
       packetHandler->getRxPacketError(dxl_error);
     else
-      printf("Dynamixel#%d has been successfully connected", dxl_id);
+      ROS_INFO("Dynamixel[%2d] Torque ON", dxl_id);
   }
   for(int i=0;i<LEG_DOF;i++){
     uint8_t dxl_id = joints[right_joint_name[i]];
@@ -79,7 +79,7 @@ bool dxl_controller::Torque_ON_dxls(){
     else if (dxl_error != 0)
       packetHandler->getRxPacketError(dxl_error);
     else
-      printf("Dynamixel#%d has been successfully connected \n", dxl_id);
+      ROS_INFO("Dynamixel[%2d] Torque ON", dxl_id);
   }
 }
 bool dxl_controller::Torque_OFF_dxls(){
@@ -297,13 +297,14 @@ void dxl_controller::Read_Dxl_Encoder_Once(int *Encoder_array){  // inappropriat
   // Get 12 Dynamixels present position value
   for(iter = joints.begin();iter!=joints.end();iter++){
     int dxl_id = iter->second;
-    Encoder_value[dxl_id-1] = groupSyncRead.getData(dxl_id, ADDR_PRESENT_POSITION, LEN_PRESENT_POSITION);
+    Encoder_array[dxl_id-1] = groupSyncRead.getData(dxl_id, ADDR_PRESENT_POSITION, LEN_PRESENT_POSITION);
     if (dxl_getdata_result != true){
       ROS_ERROR("[ID:%03d] groupSyncRead getdata failed", dxl_id);
       return;
     }
+    //ROS_WARN("%d",Encoder_array[dxl_id-1]);
   }
-  Encoder_array = Encoder_value; //Encoder Output
+  //Encoder_array = Encoder_value; //Encoder Output
 }
 void dxl_controller::Sync_Position_command_TxOnly(int (&dxl_goal_posi)[TOTAL_DXL_NUM]){
 

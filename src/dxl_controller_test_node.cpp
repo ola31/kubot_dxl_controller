@@ -15,15 +15,27 @@ int main(int argc, char **argv)
 
   dxl_controller x;
 
+  int encoder_read[12];
 
-  //x.Initialize();
-  //x.Read_Dxl_Encoder_Once(encoder_read);
+  x.Initialize();
+  x.Read_Dxl_Encoder_Once(encoder_read);
+  //x.Torque_ON_dxls();
   //x.getJointIdFrom_yaml(JOINT_ID_FILEPATH);
   //x.Sync_Position_command_TxOnly(encoder_read);
+
+  for(int i=0;i<12;i++){
+    ROS_INFO("joint %d : %d",i+1,encoder_read[i]);
+  }
 
   ros::Rate loop_rate(10);
   while (ros::ok())
   {
+    x.Read_Dxl_Encoder_Once(encoder_read);
+    for(int i=0;i<12;i++){
+      ROS_INFO("joint %d : %d",i+1,encoder_read[i]);
+    }
+    std::cout<<"---------------------------------"<<std::endl;
+
     std_msgs::String msg;
     msg.data = "hello world";
 
@@ -33,6 +45,6 @@ int main(int argc, char **argv)
 
     loop_rate.sleep();
   }
-
+x.Close_port();
   return 0;
 }
