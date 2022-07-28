@@ -5,11 +5,13 @@
 
 //DXL SDK
 dynamixel::PortHandler *portHandler = dynamixel::PortHandler::getPortHandler(DEVICENAME);
+
 //dynamixel::PacketHandler *packetHandler = dynamixel::PacketHandler::getPacketHandler(PROTOCOL_VERSION);
 dynamixel::PacketHandler *packetHandler = (dynamixel::PacketHandler *)(kubot_sync_read_write::getInstance());
-//dynamixel::GroupSyncWrite groupSyncWrite(portHandler, packetHandler, ADDR_GOAL_POSITION, LEN_GOAL_POSITION);
+
+dynamixel::GroupSyncWrite groupSyncWrite(portHandler, packetHandler, ADDR_GOAL_POSITION, LEN_GOAL_POSITION);
 dynamixel::GroupSyncRead groupSyncRead(portHandler, packetHandler, ADDR_PRESENT_POSITION, LEN_PRESENT_POSITION);
-K_GroupSyncWrite k_groupSyncWrite(portHandler, packetHandler, ADDR_GOAL_POSITION, LEN_GOAL_POSITION);
+//K_GroupSyncWrite k_groupSyncWrite(portHandler, packetHandler, ADDR_GOAL_POSITION, LEN_GOAL_POSITION);
 
 bool dxl_controller::Initialize(void){
   // Open port
@@ -331,20 +333,20 @@ void dxl_controller::Sync_Position_command_TxOnly(int (&dxl_goal_posi)[TOTAL_DXL
     param_goal_position[2] = DXL_LOBYTE(DXL_HIWORD(dxl_goal_position));
     param_goal_position[3] = DXL_HIBYTE(DXL_HIWORD(dxl_goal_position));
 
-    dxl_addparam_result = k_groupSyncWrite.addParam(dxl_id, param_goal_position);
+    dxl_addparam_result = groupSyncWrite.addParam(dxl_id, param_goal_position);
     if (dxl_addparam_result != true)
     {
-      ROS_ERROR("[ID:%03d] k_groupSyncWrite addparam failed", dxl_id);
+      ROS_ERROR("[ID:%03d] groupSyncWrite addparam failed", dxl_id);
       return;
     }
   }
   //ROS_INFO("dd");
   // Syncwrite goal position
    //k_groupSyncWrite.clearParam();
-  dxl_comm_result = k_groupSyncWrite.txPacket1();
+  dxl_comm_result = groupSyncWrite.txPacket();
    //ROS_INFO("ddd");
   if (dxl_comm_result != COMM_SUCCESS) packetHandler->getTxRxResult(dxl_comm_result);
 
   // Clear syncwrite parameter storage
-  k_groupSyncWrite.clearParam();
+  groupSyncWrite.clearParam();
 }

@@ -10,17 +10,24 @@
 //namespace dynamixel{
 //using namespace dynamixel;
 
-class WINDECLSPEC kubot_sync_read_write : public dynamixel::PacketHandler
+class kubot_sync_read_write : public dynamixel::PacketHandler
 {
   //Protocol2PacketHandler();
-  kubot_sync_read_write();
+
   private:
-    static kubot_sync_read_write *unique_instance_;
+    static kubot_sync_read_write *unique_instance_1;
+
+    kubot_sync_read_write();
+
     uint16_t    updateCRC(uint16_t crc_accum, uint8_t *data_blk_ptr, uint16_t data_blk_size);
     void        addStuffing(uint8_t *packet);
     void        removeStuffing(uint8_t *packet);
+
   public:
-    static kubot_sync_read_write *getInstance() { return unique_instance_; }
+    static kubot_sync_read_write *getInstance(){
+      if(unique_instance_1 == NULL) unique_instance_1 = new kubot_sync_read_write();
+      return unique_instance_1;
+    }
     virtual ~kubot_sync_read_write() { }
 
     //int txPacket(dynamixel::PortHandler *port, uint8_t *txpacket);
@@ -525,5 +532,7 @@ class WINDECLSPEC kubot_sync_read_write : public dynamixel::PacketHandler
 
 
 //}
+//kubot_sync_read_write *kubot_sync_read_write::unique_instance_1 = nullptr;
+
 
 #endif // KUBOT_SYNC_READ_WRITE_H

@@ -1,4 +1,9 @@
+#include <unistd.h>
 #include "kubot_dxl_controller/kubot_sync_read_write.h"
+
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
 
 #define TXPACKET_MAX_LEN    (1*1024)
 #define RXPACKET_MAX_LEN    (1*1024)
@@ -26,11 +31,16 @@
 
 #define ERRBIT_ALERT            128     //When the device has a problem, this bit is set to 1. Check "Device Status Check" value.
 
-//using namespace dynamixel;
+using namespace dynamixel;
 
-kubot_sync_read_write *kubot_sync_read_write::unique_instance_ = new kubot_sync_read_write();
+kubot_sync_read_write *kubot_sync_read_write::unique_instance_1 = NULL;//new kubot_sync_read_write();
 
 kubot_sync_read_write::kubot_sync_read_write() { }
+
+//kubot_sync_read_write *kubot_sync_read_write::getInstance() //{
+ // static kubot_sync_read_write *unique_instance_ = new kubot_sync_read_write();
+  //return unique_instance_;
+//}
 
 const char *kubot_sync_read_write::getTxRxResult(int result)
 {
