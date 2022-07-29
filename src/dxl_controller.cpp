@@ -6,8 +6,8 @@
 //DXL SDK
 dynamixel::PortHandler *portHandler = dynamixel::PortHandler::getPortHandler(DEVICENAME);
 
-//dynamixel::PacketHandler *packetHandler = dynamixel::PacketHandler::getPacketHandler(PROTOCOL_VERSION);
-dynamixel::PacketHandler *packetHandler = (dynamixel::PacketHandler *)(kubot_sync_read_write::getInstance());
+dynamixel::PacketHandler *packetHandler = dynamixel::PacketHandler::getPacketHandler(PROTOCOL_VERSION);
+//dynamixel::PacketHandler *packetHandler = (dynamixel::PacketHandler *)(kubot_sync_read_write::getInstance());
 
 dynamixel::GroupSyncWrite groupSyncWrite(portHandler, packetHandler, ADDR_GOAL_POSITION, LEN_GOAL_POSITION);
 dynamixel::GroupSyncRead groupSyncRead(portHandler, packetHandler, ADDR_PRESENT_POSITION, LEN_PRESENT_POSITION);

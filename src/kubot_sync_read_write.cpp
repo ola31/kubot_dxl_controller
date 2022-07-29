@@ -415,8 +415,10 @@ int kubot_sync_read_write::txRxPacket(dynamixel::PortHandler *port, uint8_t *txp
   if (txpacket[PKT_ID] == BROADCAST_ID || txpacket[PKT_INSTRUCTION] == INST_ACTION)
   {
     port->is_using_ = false;
+    ROS_INFO("a");
     return result;
   }
+  ROS_INFO("b");
 
   // set packet timeout
   if (txpacket[PKT_INSTRUCTION] == INST_READ)
@@ -982,7 +984,7 @@ int kubot_sync_read_write::syncWriteTxOnly(dynamixel::PortHandler *port, uint16_
 
   if (txpacket == NULL)
     return result;
-  ROS_INFO("s");
+  //ROS_INFO("s");
 
   txpacket[PKT_ID]            = BROADCAST_ID;
   txpacket[PKT_LENGTH_L]      = DXL_LOBYTE(param_length + 7); // 7: INST START_ADDR_L START_ADDR_H DATA_LEN_L DATA_LEN_H CRC16_L CRC16_H
@@ -992,13 +994,15 @@ int kubot_sync_read_write::syncWriteTxOnly(dynamixel::PortHandler *port, uint16_
   txpacket[PKT_PARAMETER0+1]  = DXL_HIBYTE(start_address);
   txpacket[PKT_PARAMETER0+2]  = DXL_LOBYTE(data_length);
   txpacket[PKT_PARAMETER0+3]  = DXL_HIBYTE(data_length);
-  ROS_INFO("ss");
+  //ROS_INFO("ss");
 
   for (uint16_t s = 0; s < param_length; s++)
     txpacket[PKT_PARAMETER0+4+s] = param[s];
   //memcpy(&txpacket[PKT_PARAMETER0+4], param, param_length);
-  ROS_INFO("sss");
-  result = txPacket(port, txpacket);
+  //ROS_INFO("sss");
+  //result = txPacket(port, txpacket);
+  //port->is_using_ = false;
+  result = txRxPacket(port, txpacket, 0, 0);
 
   free(txpacket);
   //delete[] txpacket;
