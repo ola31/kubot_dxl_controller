@@ -62,49 +62,53 @@ bool dxl_controller::SetBaudRate(void){
 bool dxl_controller::Torque_ON_dxls(){
   int dxl_comm_result = COMM_TX_FAIL;             // Communication result
 
+  std::cout<<std::endl;
+
   for(int i=0;i<LEG_DOF;i++){
-    uint8_t dxl_id = joints[left_joint_name[i]];
+    uint8_t r_dxl_id = joints[right_joint_name[i]];
+    uint8_t l_dxl_id = joints[left_joint_name[i]];
     uint8_t dxl_error=0;
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, dxl_id, ADDR_TORQUE_ENABLE, TORQUE_ENABLE, &dxl_error);
+
+    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, r_dxl_id, ADDR_TORQUE_ENABLE, TORQUE_ENABLE, &dxl_error);
     if (dxl_comm_result != COMM_SUCCESS)
       packetHandler->getTxRxResult(dxl_comm_result);
     else if (dxl_error != 0)
       packetHandler->getRxPacketError(dxl_error);
     else
-      ROS_INFO("Dynamixel[%2d] Torque ON", dxl_id);
-  }
-  for(int i=0;i<LEG_DOF;i++){
-    uint8_t dxl_id = joints[right_joint_name[i]];
-    uint8_t dxl_error=0;
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, dxl_id, ADDR_TORQUE_ENABLE, TORQUE_ENABLE, &dxl_error);
+      ROS_INFO("Dynamixel[%2d] Torque ON", r_dxl_id);
+
+    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, l_dxl_id, ADDR_TORQUE_ENABLE, TORQUE_ENABLE, &dxl_error);
     if (dxl_comm_result != COMM_SUCCESS)
       packetHandler->getTxRxResult(dxl_comm_result);
     else if (dxl_error != 0)
       packetHandler->getRxPacketError(dxl_error);
     else
-      ROS_INFO("Dynamixel[%2d] Torque ON", dxl_id);
+      ROS_INFO("Dynamixel[%2d] Torque ON", l_dxl_id);
   }
 }
 bool dxl_controller::Torque_OFF_dxls(){
   int dxl_comm_result = COMM_TX_FAIL;             // Communication result
 
   for(int i=0;i<LEG_DOF;i++){
-    uint8_t dxl_id = joints[left_joint_name[i]];
+    uint8_t r_dxl_id = joints[right_joint_name[i]];
+    uint8_t l_dxl_id = joints[left_joint_name[i]];
     uint8_t dxl_error=0;
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, dxl_id, ADDR_TORQUE_ENABLE, TORQUE_DISABLE, &dxl_error);
+
+    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, r_dxl_id, ADDR_TORQUE_ENABLE, TORQUE_DISABLE, &dxl_error);
     if (dxl_comm_result != COMM_SUCCESS)
       packetHandler->getTxRxResult(dxl_comm_result);
     else if (dxl_error != 0)
       packetHandler->getRxPacketError(dxl_error);
-  }
-  for(int i=0;i<LEG_DOF;i++){
-    uint8_t dxl_id = joints[right_joint_name[i]];
-    uint8_t dxl_error=0;
-    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, dxl_id, ADDR_TORQUE_ENABLE, TORQUE_DISABLE, &dxl_error);
+    else
+      ROS_INFO("Dynamixel[%2d] Torque ON", r_dxl_id);
+
+    dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, l_dxl_id, ADDR_TORQUE_ENABLE, TORQUE_DISABLE, &dxl_error);
     if (dxl_comm_result != COMM_SUCCESS)
       packetHandler->getTxRxResult(dxl_comm_result);
     else if (dxl_error != 0)
       packetHandler->getRxPacketError(dxl_error);
+    else
+      ROS_INFO("Dynamixel[%2d] Torque ON", l_dxl_id);
   }
 }
 bool dxl_controller::ping_dxls(void){
@@ -112,36 +116,36 @@ bool dxl_controller::ping_dxls(void){
   uint8_t error = 0;
   uint16_t model_num;
   int dxl_comm_result = COMM_TX_FAIL;
-  std::string joint_name;
-  int joint_id;
 
+  std::string r_joint_name,l_joint_name;
+  int r_dxl_id, l_dxl_id;
   bool result = true;
 
   for(int i=0;i<LEG_DOF;i++){  //Left leg ping
-    joint_name = left_joint_name[i];
-    joint_id = joints[joint_name];
 
-    dxl_comm_result = packetHandler->ping(portHandler,joint_id, &model_num, &error);
+    r_joint_name = right_joint_name[i];
+    l_joint_name = left_joint_name[i];
+
+    r_dxl_id = joints[r_joint_name];
+    l_dxl_id = joints[l_joint_name];
+
+    dxl_comm_result = packetHandler->ping(portHandler,r_dxl_id, &model_num, &error);
     if(dxl_comm_result == COMM_SUCCESS)
-      ROS_INFO("JOINT[ %17s ] : ID[%2d] : MODEL[%d] Found",joint_name.c_str(), joint_id, model_num);
+      ROS_INFO("JOINT[ %17s ] : ID[%2d] : MODEL[%6s] Found",r_joint_name.c_str(), r_dxl_id, get_dxl_model_name(model_num));
     else{
-      ROS_ERROR("JOINT[ %17s ] : ID(%2d) Not Found",joint_name.c_str(),joint_id);
+      ROS_ERROR("JOINT[ %17s ] : ID(%2d) Not Found",r_joint_name.c_str(),r_dxl_id);
+      result = false;
+    }
+
+    dxl_comm_result = packetHandler->ping(portHandler,l_dxl_id, &model_num, &error);
+    if(dxl_comm_result == COMM_SUCCESS)
+      ROS_INFO("JOINT[ %17s ] : ID[%2d] : MODEL[%6s] Found",l_joint_name.c_str(), l_dxl_id, get_dxl_model_name(model_num));
+    else{
+      ROS_ERROR("JOINT[ %17s ] : ID(%2d) Not Found",l_joint_name.c_str(),l_dxl_id);
       result = false;
     }
   }
-  std::cout<<std::endl;
-  for(int i=0;i<LEG_DOF;i++){  //Right leg ping
-    joint_name = right_joint_name[i];
-    joint_id = joints[joint_name];
 
-    dxl_comm_result = packetHandler->ping(portHandler,joint_id, &error);
-    if(dxl_comm_result == COMM_SUCCESS)
-      ROS_INFO("JOINT[ %17s ] : ID[%2d] : MODEL[%d] Found",joint_name.c_str(), joint_id, model_num);
-    else{
-      ROS_ERROR("JOINT[ %17s ] : ID(%2d) Not Found",joint_name.c_str(),joint_id);
-      result = false;
-    }
-  }
   /*
   for(auto iter = joints.begin() ; iter !=  joints.end(); iter++){
     std::cout<<iter->first<<" "<<iter->second<<std::endl;
@@ -150,6 +154,23 @@ bool dxl_controller::ping_dxls(void){
 
   return result;
 }
+
+const char* dxl_controller::get_dxl_model_name(int dxls_model_num){
+  switch(dxls_model_num)
+  {
+    case 321:
+      return "MX-106";
+    case 311:
+      return "MX-64";
+    case 30:
+      return "MX-28";
+    default:
+      return "Unknown";
+  }
+
+}
+
+
 bool dxl_controller::getJointIdFrom_yaml(const char file_path[]){  //JOINT_ID_FILEPATH
   std::string local_path(file_path);
   std::string path = this->pkg_path+local_path;
@@ -314,7 +335,8 @@ void dxl_controller::Sync_Position_command_TxOnly(int (&dxl_goal_posi)[TOTAL_DXL
   /*** [ CAUTION!!] ********************************************************************************************
    * 'dxl_goal_posi[]' is a array of joint positions
    * 'dxl_goal_posi[]' must be passed to this function in the following format.
-   * int dxl_goal_posi[TOTAL_DXL_NUM] = {ID1_dxl's posi, ID2'2 posi, ID3's posi, ... , ID(TOTAL_DXL_NUM)'s posi};
+   * int dxl_goal_posi[TOTAL_DXL_NUM] = {rightside 1th dxl posi, leftside 1th dxl posi, rightside 2th, leftside 2th ...};
+   * The right side matches the direction of the robot's own right hand and leg
    *************************************************************************************************************/
 
   bool dxl_addparam_result = false;                // addParam result
@@ -323,6 +345,12 @@ void dxl_controller::Sync_Position_command_TxOnly(int (&dxl_goal_posi)[TOTAL_DXL
   uint8_t param_goal_position[4];
 
   std::map<std::string,int>::iterator iter;
+  /*** [ CAUTION!!] ************(this can be ignored)************************************************************
+   * 'dxl_goal_posi[]' is a array of joint positions
+   * 'dxl_goal_posi[]' must be passed to this function in the following format.
+   * int dxl_goal_posi[TOTAL_DXL_NUM] = {ID1_dxl's posi, ID2'2 posi, ID3's posi, ... , ID(TOTAL_DXL_NUM)'s posi};
+   *************************************************************************************************************/
+  /*
   for(iter = joints.begin();iter!=joints.end();iter++){
     int dxl_id = iter->second;
     int dxl_goal_position = dxl_goal_posi[dxl_id-1];
@@ -340,11 +368,45 @@ void dxl_controller::Sync_Position_command_TxOnly(int (&dxl_goal_posi)[TOTAL_DXL
       return;
     }
   }
-  //ROS_INFO("dd");
+  */
+
+  for(int i=0; i<(TOTAL_DXL_NUM/2); i++){
+
+    int RightSide_dxl_id = joints[right_joint_name[i]];
+    int LeftSide_dxl_id = joints[left_joint_name[i]];
+    int RightSide_dxl_goal_posi = dxl_goal_posi[2*i];   //0 2 4 ...10th
+    int LeftSide_dxl_goal_posi = dxl_goal_posi[2*i+1]; //1 3 5 ...11th
+
+    // Allocate goal position value into byte array
+
+    //Right Side DXL add param
+    param_goal_position[0] = DXL_LOBYTE(DXL_LOWORD(RightSide_dxl_goal_posi));
+    param_goal_position[1] = DXL_HIBYTE(DXL_LOWORD(RightSide_dxl_goal_posi));
+    param_goal_position[2] = DXL_LOBYTE(DXL_HIWORD(RightSide_dxl_goal_posi));
+    param_goal_position[3] = DXL_HIBYTE(DXL_HIWORD(RightSide_dxl_goal_posi));
+
+    dxl_addparam_result = groupSyncWrite.addParam(RightSide_dxl_id, param_goal_position);
+    if (dxl_addparam_result != true)
+    {
+      ROS_ERROR("[ID:%03d] groupSyncWrite addparam failed", RightSide_dxl_id);
+      return;
+    }
+    //Left Side DXL add param
+    param_goal_position[0] = DXL_LOBYTE(DXL_LOWORD(LeftSide_dxl_goal_posi));
+    param_goal_position[1] = DXL_HIBYTE(DXL_LOWORD(LeftSide_dxl_goal_posi));
+    param_goal_position[2] = DXL_LOBYTE(DXL_HIWORD(LeftSide_dxl_goal_posi));
+    param_goal_position[3] = DXL_HIBYTE(DXL_HIWORD(LeftSide_dxl_goal_posi));
+
+    dxl_addparam_result = groupSyncWrite.addParam(LeftSide_dxl_id, param_goal_position);
+    if (dxl_addparam_result != true)
+    {
+      ROS_ERROR("[ID:%03d] groupSyncWrite addparam failed", LeftSide_dxl_id);
+      return;
+    }
+  }
   // Syncwrite goal position
-   //k_groupSyncWrite.clearParam();
   dxl_comm_result = groupSyncWrite.txPacket();
-   //ROS_INFO("ddd");
+
   if (dxl_comm_result != COMM_SUCCESS) packetHandler->getTxRxResult(dxl_comm_result);
 
   // Clear syncwrite parameter storage

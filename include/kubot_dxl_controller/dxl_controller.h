@@ -70,6 +70,7 @@ public:
   bool Torque_ON_dxls();
   bool Torque_OFF_dxls();
   bool ping_dxls(void);
+  const char* get_dxl_model_name(int dxls_model_num);
   bool getJointIdFrom_yaml(const char file_path[]);
   bool getJoint_PD_gainFrom_yaml(const char file_path[]);
   bool setDXL_PD_gain(void);
