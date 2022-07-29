@@ -1,59 +1,59 @@
 left_hip_yaw : 
 
-  P_gain: 850
-  D_gain: 0
+  P_gain: 1500 #850
+  D_gain: 50 #0
 
 right_hip_yaw : 
 
-  P_gain: 850
-  D_gain: 0
+  P_gain: 1500 #850
+  D_gain: 50 #0
 
 left_hip_roll : 
 
-  P_gain: 850
-  D_gain: 0
+  P_gain: 1500 #850
+  D_gain: 50 #0
 
 right_hip_roll : 
 
-  P_gain: 850
-  D_gain: 0
+  P_gain: 1500 #850
+  D_gain: 50 #0
 
 left_hip_pitch : 
 
-  P_gain: 850
-  D_gain: 0
+  P_gain: 1500 #850
+  D_gain: 50 #0
 
 right_hip_pitch : 
 
-  P_gain: 850
-  D_gain: 0
+  P_gain: 1500 #850
+  D_gain: 50 #0
 
 left_knee : 
 
-  P_gain: 850
-  D_gain: 0
+  P_gain: 1500 #850
+  D_gain: 50 #0
 
 right_knee : 
 
-  P_gain: 850
-  D_gain: 0
+  P_gain: 1500 #850
+  D_gain: 50 #0
 
 left_ankle_pitch : 
 
-  P_gain: 850
-  D_gain: 0
+  P_gain: 1500 #850
+  D_gain: 50 #0
 
 right_ankle_pitch : 
 
-  P_gain: 850
-  D_gain: 0
+  P_gain: 1500 #850
+  D_gain: 50 #0
 
 left_ankle_roll : 
 
-  P_gain: 850
-  D_gain: 0
+  P_gain: 1500 #850
+  D_gain: 50 #0
 right_ankle_roll : 
 
-  P_gain: 850
-  D_gain: 0
+  P_gain: 1500 #850
+  D_gain: 50 #0
 

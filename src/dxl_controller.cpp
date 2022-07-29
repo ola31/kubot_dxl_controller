@@ -18,17 +18,25 @@ bool dxl_controller::Initialize(void){
   if (!OpenPort()) return false;
 
   // Set port baudrate
-  if (!SetBaudRate()) return false;
+  if (!SetBaudRate()) {ROS_ERROR("SetBaudRate Failed");  return false;}
 
   //get joint DXL ID
-  if(!getJointIdFrom_yaml(JOINT_ID_FILEPATH)) return false;
+  if(!getJointIdFrom_yaml(JOINT_ID_FILEPATH)) {ROS_ERROR("getJointIdFrom_yaml Failed");  return false;}
 
   //get joint DXL PD gain
-  if(!getJoint_PD_gainFrom_yaml(JOINT_PD_GAIN_FILEPATH)) return false;
+  if(!getJoint_PD_gainFrom_yaml(JOINT_PD_GAIN_FILEPATH)) {ROS_ERROR("getJoint_PD_gainFrom_yaml Failed");  return false;}
+
 
   //ping dxls to check communiation
   if(!ping_dxls()) return false;
 
+  //Torque ON
+  if(!Torque_ON_dxls()) {ROS_ERROR("Torque_ON_dxls Failed");  return false;}
+
+  //Set PD gain
+  if(!setDXL_PD_gain()) {ROS_ERROR("setDXL_PD_gain failed");  return false;}
+
+  //Set SyncRead Param
   set_Dxl_Encoder_SyncRead();
 
   return true;
@@ -245,46 +253,59 @@ bool dxl_controller::getJoint_PD_gainFrom_yaml(const char file_path[]){
 bool dxl_controller::setDXL_PD_gain(void){
   uint8_t dxl_error=0;
   uint8_t dxl_comm_result = COMM_TX_FAIL;             // Communication result
+  int p_gain = 850;
+  int d_gain = 0;
+
 
   for(int i=0;i<LEG_DOF;i++){  //left leg dxls
     int dxl_id = joints[left_joint_name[i]];
     //set p gain
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, dxl_id, ADDR_POSITION_P_GAIN, TORQUE_ENABLE, &dxl_error);
+    p_gain = jointP_gain[left_joint_name[i]];
+    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, dxl_id, ADDR_POSITION_P_GAIN, p_gain, &dxl_error);
     if (dxl_comm_result != COMM_SUCCESS)
       packetHandler->getTxRxResult(dxl_comm_result);
     else if (dxl_error != 0){
       packetHandler->getRxPacketError(dxl_error);
       ROS_ERROR("DXL_SET_P_GAIN_FAILED[ID:%d]",dxl_id);
+      return false;
     }
     //set d gain
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, dxl_id, ADDR_POSITION_D_GAIN, TORQUE_ENABLE, &dxl_error);
+    d_gain = jointD_gain[left_joint_name[i]];
+    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, dxl_id, ADDR_POSITION_D_GAIN, d_gain, &dxl_error);
     if (dxl_comm_result != COMM_SUCCESS)
       packetHandler->getTxRxResult(dxl_comm_result);
     else if (dxl_error != 0){
       packetHandler->getRxPacketError(dxl_error);
       ROS_ERROR("DXL_SET_D_GAIN_FAILED[ID:%d]",dxl_id);
+      return false;
     }
 
   }
   for(int i=0;i<LEG_DOF;i++){  //right leg dxls
     int dxl_id = joints[right_joint_name[i]];
     //set p gain
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, dxl_id, ADDR_POSITION_P_GAIN, TORQUE_ENABLE, &dxl_error);
+    p_gain = jointP_gain[right_joint_name[i]];
+    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, dxl_id, ADDR_POSITION_P_GAIN, p_gain, &dxl_error);
     if (dxl_comm_result != COMM_SUCCESS)
       packetHandler->getTxRxResult(dxl_comm_result);
     else if (dxl_error != 0){
       packetHandler->getRxPacketError(dxl_error);
       ROS_ERROR("DXL_SET_P_GAIN_FAILED[ID:%d]",dxl_id);
+      return false;
     }
     //set d gain
-    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, dxl_id, ADDR_POSITION_D_GAIN, TORQUE_ENABLE, &dxl_error);
+    d_gain = jointD_gain[right_joint_name[i]];
+    dxl_comm_result = packetHandler->write4ByteTxRx(portHandler, dxl_id, ADDR_POSITION_D_GAIN, d_gain, &dxl_error);
     if (dxl_comm_result != COMM_SUCCESS)
       packetHandler->getTxRxResult(dxl_comm_result);
     else if (dxl_error != 0){
       packetHandler->getRxPacketError(dxl_error);
       ROS_ERROR("DXL_SET_D_GAIN_FAILED[ID:%d]",dxl_id);
+      return false;
     }
   }
+
+  return true;
 }
 void dxl_controller::set_Dxl_Encoder_SyncRead(void){
   bool dxl_addparam_result = true;                // addParam result

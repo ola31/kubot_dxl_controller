@@ -26,7 +26,6 @@ int main(int argc, char **argv)
 
   x.Initialize();
   x.Read_Dxl_Encoder_Once(encoder_read);
-  x.Torque_ON_dxls();
   //x.getJointIdFrom_yaml(JOINT_ID_FILEPATH);
   //x.Sync_Position_command_TxOnly(encoder_read);
 
