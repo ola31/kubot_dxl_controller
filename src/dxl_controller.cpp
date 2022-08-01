@@ -80,19 +80,24 @@ bool dxl_controller::Torque_ON_dxls(){
     dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, r_dxl_id, ADDR_TORQUE_ENABLE, TORQUE_ENABLE, &dxl_error);
     if (dxl_comm_result != COMM_SUCCESS)
       packetHandler->getTxRxResult(dxl_comm_result);
-    else if (dxl_error != 0)
+    else if (dxl_error != 0){
       packetHandler->getRxPacketError(dxl_error);
+      return false;
+    }
     else
       ROS_INFO("Dynamixel[%2d] Torque ON", r_dxl_id);
 
     dxl_comm_result = packetHandler->write1ByteTxRx(portHandler, l_dxl_id, ADDR_TORQUE_ENABLE, TORQUE_ENABLE, &dxl_error);
     if (dxl_comm_result != COMM_SUCCESS)
       packetHandler->getTxRxResult(dxl_comm_result);
-    else if (dxl_error != 0)
+    else if (dxl_error != 0){
       packetHandler->getRxPacketError(dxl_error);
+      return false;
+    }
     else
       ROS_INFO("Dynamixel[%2d] Torque ON", l_dxl_id);
   }
+  return true;
 }
 bool dxl_controller::Torque_OFF_dxls(){
   int dxl_comm_result = COMM_TX_FAIL;             // Communication result
